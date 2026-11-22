@@ -1768,7 +1768,31 @@ body{background:radial-gradient(ellipse at 50% -12%,#102c54 0,#0b111a 34%,#05060
     if(!label||!action)return;
     const b=document.createElement('button');b.type='button';b.className='mora-ai-chip mora-ai-action';b.textContent='↗ '+label;b.style.cssText='margin:8px 0 2px;display:inline-flex;align-items:center;gap:6px;border:1px solid #6aa8ff;background:#101e32;color:#fff;border-radius:12px;padding:9px 12px;font:700 12px system-ui;cursor:pointer';b.addEventListener('click',action);replyEl.appendChild(b);messages.scrollTop=messages.scrollHeight;
   }
-  function send(text){const value=(text||input.value||'').trim();if(!value)return;addMsg(value,'user');input.value='';input.style.height='auto';const wait=addMsg('ثواني، براجع خدمات وأسعار MORA STORE…','bot');setTimeout(()=>{try{wait.textContent=answer(value);moraAddAction(wait,value)}catch(err){wait.textContent='حصلت مشكلة وأنا براجع الكتالوج. جرّب تكتب اسم المنصة والخدمة والكمية بشكل أوضح.'}messages.scrollTop=messages.scrollHeight},100)}
+  // MORA AI upgrade: try the server-side LLM endpoint first, fall back to the built-in rule engine.
+  const moraAIHistory=[];
+  function moraCatalogContext(){try{const byCat={};services.forEach(s=>{(byCat[s.title]=byCat[s.title]||[]).push(s.name+': '+s.price+' جنيه'+(s.qty?(' لكل '+Number(s.qty).toLocaleString('en-US')):''))});return Object.keys(byCat).map(k=>'### '+k+'\n'+byCat[k].join('\n')).join('\n\n').slice(0,14000)}catch(e){return ''}}
+  function moraFaqContext(){try{return [...document.querySelectorAll('.faq-item,details')].map(el=>(el.innerText||'').trim()).filter(t=>t.length>10&&t.length<1500).join('\n---\n').slice(0,6000)}catch(e){return ''}}
+  function moraPaymentContext(){try{if(typeof PAY==='object'&&PAY)return Object.values(PAY).map(p=>p&&p.name?(p.name+': '+p.details):'').filter(Boolean).join('\n').slice(0,2000)}catch(e){}return ''}
+  async function moraAskAI(value){
+    const ctx={catalog:moraCatalogContext(),faq:moraFaqContext(),offers:moraOffersKnowledge().join('\n\n').slice(0,6000),payment:moraPaymentContext()};
+    const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),15000);
+    try{
+      const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},signal:ctrl.signal,body:JSON.stringify({message:value.slice(0,1000),history:moraAIHistory.slice(-6),context:ctx})});
+      clearTimeout(timer);
+      if(!r.ok)return null;
+      const data=await r.json().catch(()=>null);
+      const reply=data&&typeof data.reply==='string'?data.reply.trim():'';
+      return reply||null;
+    }catch(e){clearTimeout(timer);return null}
+  }
+  function send(text){const value=(text||input.value||'').trim();if(!value)return;addMsg(value,'user');input.value='';input.style.height='auto';const wait=addMsg('ثواني، براجع خدمات وأسعار MORA STORE…','bot');
+    (async()=>{
+      const ai=await moraAskAI(value);
+      if(ai){wait.textContent=ai;moraAIHistory.push({role:'user',text:value},{role:'bot',text:ai});messages.scrollTop=messages.scrollHeight;return}
+      try{wait.textContent=answer(value);moraAIHistory.push({role:'user',text:value},{role:'bot',text:wait.textContent});moraAddAction(wait,value)}catch(err){wait.textContent='حصلت مشكلة وأنا براجع الكتالوج. جرّب تكتب اسم المنصة والخدمة والكمية بشكل أوضح.'}
+      messages.scrollTop=messages.scrollHeight;
+    })();
+  }
   form.addEventListener('submit',e=>{e.preventDefault();send(input.value)});
   input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,90)+'px'});
   input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(input.value)}});
