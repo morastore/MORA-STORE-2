@@ -1789,7 +1789,7 @@ body{background:radial-gradient(ellipse at 50% -12%,#102c54 0,#0b111a 34%,#05060
     (async()=>{
       const ai=await moraAskAI(value);
       if(ai){wait.textContent=ai;moraAIHistory.push({role:'user',text:value},{role:'bot',text:ai});messages.scrollTop=messages.scrollHeight;return}
-      try{wait.textContent=answer(value);moraAIHistory.push({role:'user',text:value},{role:'bot',text:wait.textContent});moraAddAction(wait,value)}catch(err){wait.textContent='حصلت مشكلة وأنا براجع الكتالوج. جرّب تكتب اسم المنصة والخدمة والكمية بشكل أوضح.'}
+      try{wait.textContent=answer(value);moraAIHistory.push({role:'user',text:value},{role:'bot',text:wait.textContent});moraAddAction(wait,value)}catch(err){console.error('MORA-BOT-ERR',err&&err.stack||(''+err));wait.textContent='حصلت مشكلة وأنا براجع الكتالوج. جرّب تكتب اسم المنصة والخدمة والكمية بشكل أوضح.'}
       messages.scrollTop=messages.scrollHeight;
     })();
   }
